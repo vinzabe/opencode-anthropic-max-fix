@@ -5,16 +5,16 @@ OpenCode's Anthropic OAuth routes requests through claude.ai's extra usage billi
 ## One-liner fix
 
 ```
-curl -sL https://raw.githubusercontent.com/zai-coding-plan/opencode-anthropic-max-fix/main/install.sh | bash
+curl -sL https://raw.githubusercontent.com/vinzabe/opencode-anthropic-max-fix/main/install.sh | bash
 ```
 
-Then restart opencode and run `/connect` → **Anthropic API Key** → **Claude Pro/Max**.
+Then restart opencode and run `/connect` → **Claude Pro/Max** (OAuth login).
 
 ## What it does
 
-1. Installs [`op-anthropic-auth`](https://github.com/leohenon/op-anthropic-auth) — a drop-in replacement plugin that uses the correct `claude-code/{version}` user-agent (matching real Claude Code CLI)
+1. Installs `op-anthropic-auth` — a drop-in OAuth plugin that uses the correct `claude-code/{version}` user-agent (matching real Claude Code CLI)
 2. Patches the token exchange endpoint from `platform.claude.com` → `console.anthropic.com` (avoids rate limits)
-3. Updates your opencode config to use the new plugin
+3. Updates your opencode config to use the new OAuth plugin
 
 ## Why it works
 
