@@ -10,6 +10,14 @@ curl -sL https://raw.githubusercontent.com/vinzabe/opencode-anthropic-max-fix/ma
 
 Then restart opencode and run `/connect` → **Claude Pro/Max** (OAuth login).
 
-## After opencode updates
+## How it works
 
-Re-run the one-liner — opencode may overwrite the patched plugin.
+The fix patches the `op-anthropic-auth` plugin to route token exchanges through Anthropic's console endpoint (which respects your Max/Pro plan quota) instead of the claude.ai platform endpoint (which uses "extra usage" billing).
+
+A persistence wrapper is installed at `/usr/bin/opencode` that automatically re-applies patches if opencode or bun overwrites them during startup — no need to re-run the installer after updates.
+
+## Requirements
+
+- Root access (for wrapper installation at `/usr/bin/opencode`)
+- Node.js (already required by opencode)
+- A Claude Max or Pro subscription
