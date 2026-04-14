@@ -1,23 +1,37 @@
-# Fix "Out of Extra Usage" in OpenCode (Claude Max/Pro)
+# Anthropic OAuth Fix for OpenCode
 
-OpenCode's Anthropic OAuth routes requests through claude.ai's extra usage billing instead of your Claude Max/Pro plan quota.
+Enables Claude Pro/Max subscription models (Sonnet, Opus, Haiku) in [opencode](https://opencode.ai).
 
-## One-liner fix
+## OAuth Login
+
+After installing, restart opencode → `/connect` → **Claude Pro/Max** → authorize in browser → paste the code.
+
+## Install
 
 ```bash
-curl -sL https://raw.githubusercontent.com/vinzabe/opencode-anthropic-max-fix/main/install.js | node
+curl -sL https://raw.githubusercontent.com/vinzabe/opencode-anthropic-max-fix/main/install.cjs | node
 ```
 
-Then restart opencode and run `/connect` → **Claude Pro/Max** (OAuth login).
+## What it does
 
-## How it works
-
-The fix patches the `op-anthropic-auth` plugin to route token exchanges through Anthropic's console endpoint (which respects your Max/Pro plan quota) instead of the claude.ai platform endpoint (which uses "extra usage" billing).
-
-A persistence wrapper is installed at `/usr/bin/opencode` that automatically re-applies patches if opencode or bun overwrites them during startup — no need to re-run the installer after updates.
+1. Installs the correct `op-anthropic-auth@0.1.1` plugin with OAuth billing header support
+2. Persists the plugin across opencode restarts (which overwrite it via `bun install`)
+3. Sets up a systemd watcher for automatic re-application
 
 ## Requirements
 
-- Root access (for wrapper installation at `/usr/bin/opencode`)
-- Node.js (already required by opencode)
-- A Claude Max or Pro subscription
+- Node.js, systemd (Linux)
+- Claude Max or Pro subscription
+
+## Reverting
+
+```bash
+systemctl --user disable --now opencode-anthropic-patch.path opencode-anthropic-patch.service
+rm ~/.config/systemd/user/opencode-anthropic-patch.{service,path}
+```
+
+## Without systemd
+
+```bash
+curl -sL https://raw.githubusercontent.com/vinzabe/opencode-anthropic-max-fix/main/install.cjs | node -- --no-systemd
+```
