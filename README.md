@@ -1,6 +1,6 @@
 # Anthropic OAuth Fix for OpenCode
 
-Enables Claude Pro/Max subscription models (Sonnet, Opus, Haiku) in [opencode](https://opencode.ai).
+Fixes the **rate limit (429)** and **"out of extra usage" / "no credit"** errors when using Claude Pro/Max subscription models (Sonnet, Opus, Haiku) in [opencode](https://opencode.ai).
 
 ## OAuth Login
 
