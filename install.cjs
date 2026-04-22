@@ -1,36 +1,156 @@
 #!/usr/bin/env node
-const _=a=>{const s={'readFileSync':1,writeFileSync:2,existsSync:3,mkdirSync:4,log:5,error:6,exit:7,parse:8,statSync:9,spawnSync:10,isFile:11,trim:12,split:13,pop:14,copyFileSync:15,readdirSync:16,recursive:17,pipe:18,utf8:19,push:20,includes:21,rmSync:22,chmodSync:23,stringify:24};return s[a]||a};const fs=require('fs'),p=require('path'),{execSync:E}=require('child_process'),os=require('os');
-const H=process.env.HOME,C=p.join(H,'.cache','opencode'),B=p.join(H,'.bun','install','cache'),N=p.join(C,'node_modules','op-anthropic-auth'),R=p.join(C,'package.json'),V='0.1.1',K='op-anthropic-auth@'+V,P=p.join(B,'op-anthropic-auth@'+V+'@@@1'),S=p.join(H,'.config','opencode','opencode.json');
-function L(m){console.log('[fix] '+m)}function D(m){console.error('[fix] '+m);process.exit(1)}
-function rf(d){try{return fs.readFileSync(d,'utf8')}catch{return''}}
-function jp(d){try{return JSON.parse(d)}catch{return null}}
-function cp(s,d){if(fs.statSync(s).isDirectory()){fs.mkdirSync(d,{recursive:true});for(const e of fs.readdirSync(s)){if(e==='.git')continue;cp(p.join(s,e),p.join(d,e))}}else fs.copyFileSync(s,d)}
-if(!fs.existsSync(C))D('opencode cache not found');
-function inst(){L('installing '+K+'...');const t=p.join(os.tmpdir(),'_oa_'+Date.now());fs.mkdirSync(t,{recursive:true});try{
-const r=require('child_process').spawnSync('npm',['pack',K,'--pack-destination',t],{stdio:'pipe',encoding:'utf8',timeout:30000});
-if(r.error)throw r.error;const f=r.stdout.trim().split('\n').pop();const x=p.join(t,'_x');fs.mkdirSync(x,{recursive:true});
-require('child_process').spawnSync('tar',['xzf',p.join(t,f),'-C',x],{stdio:'pipe'});
-const src=p.join(x,'package');cp(src,P);L('cached');if(fs.existsSync(N))try{fs.rmSync(N,{recursive:true})}catch{};cp(src,N);L('installed');
-}catch(e){D('install failed: '+e.message)}finally{try{fs.rmSync(t,{recursive:true})}catch{}}}
-function pin(){if(!fs.existsSync(R))return;let j=jp(rf(R));if(!j||!j.dependencies)return;if(j.dependencies['op-anthropic-auth']!==V){j.dependencies['op-anthropic-auth']=V;fs.writeFileSync(R,JSON.stringify(j,null,2)+'\n');L('pinned '+K)}else L('already pinned')}
-function cfg(){let j=jp(rf(S))||{};if(!j.plugin)j.plugin=[];if(!j.plugin.includes(K)){j.plugin.push(K);fs.mkdirSync(p.dirname(S),{recursive:true});fs.writeFileSync(S,JSON.stringify(j,null,2)+'\n');L('added to config')}else L('already in config')}
-function chk(){if(fs.existsSync(N)){const v=jp(rf(p.join(N,'package.json')));if(v&&v.version===V){const l=rf(p.join(N,'dist/index.js')).split('\n')[0];if(l==='import { createHash } from "node:crypto";'){L('already installed');return true}}}return false}
-if(!chk())inst();pin();cfg();
-function patch(){const f=p.join(N,'dist/index.js');let c=rf(f);if(!c.includes('/* NOLOCALHOST */')){c=c.replace(/async function authorize\(mode\) \{[\s\S]*?callback: async \(code\) => exchange\(code, pkce\.verifier, CALLBACK_URL, state\),\s*\};/,'async function authorize(mode) {\n    const pkce = await generatePKCE();\n    const state = makeState();\n    /* NOLOCALHOST */\n    return {\n        url: makeUrl(mode, pkce.challenge, state, CALLBACK_URL),\n        instructions: "Open the URL above in your browser, authorize, then copy the full callback URL and paste it here:",\n        method: "code",\n        callback: async (code) => exchange(code, pkce.verifier, CALLBACK_URL, state),\n    };\n}');fs.writeFileSync(f,c);cp(f,p.join(P,'dist/index.js'));L('patched for headless OAuth')}}patch();
-if(!process.argv.includes('--no-systemd')){
-const sd=p.join(H,'.config','systemd/user'),sf=p.join(sd,'opencode-anthropic-patch.service'),pf=p.join(sd,'opencode-anthropic-patch.path'),rs=p.join(p.join(sd,'..'),'opencode','anthropic-patch','replace.sh');
-fs.mkdirSync(p.dirname(rs),{recursive:true});
-const rsContent=[
-'#!/bin/bash','SRC="'+P+'"','DST="'+N+'"',
-'[ ! -d "$SRC" ] && echo "source missing" && exit 1',
-'[ ! -d "$DST" ] && exit 0',
-'V=$(node -e "try{console.log(JSON.parse(require(\\\'fs\\\').readFileSync(\\\'$DST/package.json\\\',\\\'utf8\\\')).version)}catch{}" 2>/dev/null)',
-'[ "$V" = "'+V+'" ] && [ "$(head -1 $DST/dist/index.js 2>/dev/null)" = \'import { createHash } from "node:crypto";\' ] && exit 0',
-'rm -rf "$DST" && cp -a "$SRC" "$DST"','echo "restored '+V+' at $(date)"',''
-].join('\n');
-fs.writeFileSync(rs,rsContent);fs.chmodSync(rs,0o755);
-fs.mkdirSync(sd,{recursive:true});
-fs.writeFileSync(sf,'[Unit]\nDescription=Restore op-anthropic-auth@'+V+' after opencode updates\n\n[Service]\nType=oneshot\nExecStart=/bin/bash '+rs+'\n');
-fs.writeFileSync(pf,'[Unit]\nDescription=Watch op-anthropic-auth for changes\n\n[Path]\nPathModified=%h/.cache/opencode/node_modules/op-anthropic-auth/dist/index.js\nUnit=opencode-anthropic-patch.service\n\n[Install]\nWantedBy=opencode-anthropic-patch.service\n');
-try{E('systemctl --user daemon-reload',{stdio:'pipe',timeout:5000});E('systemctl --user restart opencode-anthropic-patch.path opencode-anthropic-patch.service',{stdio:'pipe',timeout:5000});L('systemd watcher active')}catch(e){L('systemd skipped: '+e.message)}}
-L('done. restart opencode, /connect -> Claude Pro/Max');
+const fs = require('fs');
+const path = require('path');
+const { execSync } = require('child_process');
+const os = require('os');
+
+const HOME = process.env.HOME;
+const CACHE = path.join(HOME, '.cache', 'opencode');
+const BUN_CACHE = path.join(HOME, '.bun', 'install', 'cache');
+const NODE_MODULES = path.join(CACHE, 'node_modules');
+const PLUGIN_DIR = path.join(NODE_MODULES, 'op-anthropic-auth');
+const PKG_JSON = path.join(CACHE, 'package.json');
+const CONFIG = path.join(HOME, '.config', 'opencode', 'opencode.json');
+const VERSION = '0.1.1';
+const PKG_NAME = 'op-anthropic-auth@' + VERSION;
+const BUN_CACHE_DIR = path.join(BUN_CACHE, 'op-anthropic-auth@' + VERSION + '@@@1');
+const SRC_DIR = path.join(__dirname, 'src');
+const DIST_DIR = path.join(PLUGIN_DIR, 'dist');
+
+function log(m) { console.log('[fix] ' + m); }
+function die(m) { console.error('[fix] ' + m); process.exit(1); }
+function rf(d) { try { return fs.readFileSync(d, 'utf8'); } catch { return ''; } }
+function jp(d) { try { return JSON.parse(d); } catch { return null; } }
+
+if (!fs.existsSync(CACHE)) die('opencode cache not found');
+if (!fs.existsSync(SRC_DIR) || !fs.existsSync(path.join(SRC_DIR, 'index.js')))
+    die('src/index.js not found');
+
+function cpDir(src, dst) {
+    fs.mkdirSync(dst, { recursive: true });
+    for (const entry of fs.readdirSync(src)) {
+        const from = path.join(src, entry);
+        const to = path.join(dst, entry);
+        if (fs.statSync(from).isDirectory()) cpDir(from, to);
+        else fs.copyFileSync(from, to);
+    }
+}
+
+function createPackageJSON() {
+    return JSON.stringify({
+        name: 'op-anthropic-auth',
+        version: VERSION,
+        type: 'module',
+        main: 'dist/index.js',
+    }, null, 2);
+}
+
+function createDistDir() {
+    fs.mkdirSync(DIST_DIR, { recursive: true });
+    fs.copyFileSync(path.join(SRC_DIR, 'index.js'), path.join(DIST_DIR, 'index.js'));
+}
+
+function install() {
+    log('installing ' + PKG_NAME + ' from local source...');
+    createDistDir();
+
+    const pkgJson = createPackageJSON();
+    if (fs.existsSync(PLUGIN_DIR)) {
+        try { fs.rmSync(PLUGIN_DIR, { recursive: true }); } catch {}
+    }
+    fs.mkdirSync(PLUGIN_DIR, { recursive: true });
+    fs.writeFileSync(path.join(PLUGIN_DIR, 'package.json'), pkgJson);
+    createDistDir();
+
+    if (fs.existsSync(BUN_CACHE_DIR)) {
+        try { fs.rmSync(BUN_CACHE_DIR, { recursive: true }); } catch {}
+    }
+    fs.mkdirSync(BUN_CACHE_DIR, { recursive: true });
+    fs.mkdirSync(path.join(BUN_CACHE_DIR, 'dist'), { recursive: true });
+    fs.copyFileSync(path.join(SRC_DIR, 'index.js'), path.join(BUN_CACHE_DIR, 'dist', 'index.js'));
+    fs.writeFileSync(path.join(BUN_CACHE_DIR, 'package.json'), pkgJson);
+    log('installed to cache and bun cache');
+}
+
+function pin() {
+    if (!fs.existsSync(PKG_JSON)) return;
+    let j = jp(rf(PKG_JSON));
+    if (!j || !j.dependencies) return;
+    if (j.dependencies['op-anthropic-auth'] !== VERSION) {
+        j.dependencies['op-anthropic-auth'] = VERSION;
+        fs.writeFileSync(PKG_JSON, JSON.stringify(j, null, 2) + '\n');
+        log('pinned ' + PKG_NAME);
+    } else {
+        log('already pinned');
+    }
+}
+
+function configure() {
+    let j = jp(rf(CONFIG)) || {};
+    if (!j.plugin) j.plugin = [];
+    if (!j.plugin.includes(PKG_NAME)) {
+        j.plugin.push(PKG_NAME);
+        fs.mkdirSync(path.dirname(CONFIG), { recursive: true });
+        fs.writeFileSync(CONFIG, JSON.stringify(j, null, 2) + '\n');
+        log('added to config');
+    } else {
+        log('already in config');
+    }
+}
+
+install();
+pin();
+configure();
+
+if (!process.argv.includes('--no-systemd')) {
+    const sd = path.join(HOME, '.config', 'systemd', 'user');
+    const sf = path.join(sd, 'opencode-anthropic-patch.service');
+    const pf = path.join(sd, 'opencode-anthropic-patch.path');
+    const rs = path.join(path.join(sd, '..'), 'opencode', 'anthropic-patch', 'replace.sh');
+    fs.mkdirSync(path.dirname(rs), { recursive: true });
+    const rsContent = [
+        '#!/bin/bash',
+        'SRC="' + BUN_CACHE_DIR + '"',
+        'DST="' + PLUGIN_DIR + '"',
+        '[ ! -d "$SRC" ] && echo "source missing" && exit 1',
+        '[ ! -d "$DST" ] && exit 0',
+        'V=$(node -e "try{console.log(JSON.parse(require(\\\'fs\\\').readFileSync(\\\'$DST/package.json\\\',\\\'utf8\\\')).version)}catch{}" 2>/dev/null)',
+        '[ "$V" = "' + VERSION + '" ] && [ "$(head -1 $DST/dist/index.js 2>/dev/null)" = \'import { createHash } from "node:crypto";\' ] && exit 0',
+        'rm -rf "$DST" && cp -a "$SRC" "$DST"',
+        'echo "restored ' + VERSION + ' at $(date)"',
+        '',
+    ].join('\n');
+    fs.writeFileSync(rs, rsContent);
+    fs.chmodSync(rs, 0o755);
+    fs.mkdirSync(sd, { recursive: true });
+    fs.writeFileSync(sf, [
+        '[Unit]',
+        'Description=Restore op-anthropic-auth@' + VERSION + ' after opencode updates',
+        '',
+        '[Service]',
+        'Type=oneshot',
+        'ExecStart=/bin/bash ' + rs,
+        '',
+    ].join('\n'));
+    fs.writeFileSync(pf, [
+        '[Unit]',
+        'Description=Watch op-anthropic-auth for changes',
+        '',
+        '[Path]',
+        'PathModified=%h/.cache/opencode/node_modules/op-anthropic-auth/dist/index.js',
+        'Unit=opencode-anthropic-patch.service',
+        '',
+        '[Install]',
+        'WantedBy=opencode-anthropic-patch.service',
+        '',
+    ].join('\n'));
+    try {
+        execSync('systemctl --user daemon-reload', { stdio: 'pipe', timeout: 5000 });
+        execSync('systemctl --user restart opencode-anthropic-patch.path opencode-anthropic-patch.service', { stdio: 'pipe', timeout: 5000 });
+        log('systemd watcher active');
+    } catch (e) {
+        log('systemd skipped: ' + e.message);
+    }
+}
+
+log('done. restart opencode, /connect -> Claude Pro/Max');
