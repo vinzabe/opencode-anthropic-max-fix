@@ -9,29 +9,37 @@ After installing, restart opencode → `/connect` → **Claude Pro/Max** → aut
 ## Install
 
 ```bash
-curl -sL https://raw.githubusercontent.com/vinzabe/opencode-anthropic-max-fix/main/install.cjs | node
+curl -sL https://raw.githubusercontent.com/vinzabe/opencode-anthropic-max-fix/master/install.cjs | node
 ```
 
 ## What it does
 
-1. Installs the correct `op-anthropic-auth@0.1.1` plugin with OAuth billing header support
-2. Persists the plugin across opencode restarts (which overwrite it via `bun install`)
-3. Sets up a systemd watcher for automatic re-application
+1. Installs the correct `op-anthropic-auth@0.1.1` plugin with OAuth billing-header support, into both opencode plugin layouts (`~/.cache/opencode/node_modules/...` and `~/.cache/opencode/packages/<spec>/...`)
+2. Pins the plugin in `~/.config/opencode/opencode.json`
+3. Sets up a per-platform watcher that restores the plugin if opencode overwrites it via `bun install`
+   - **Linux**: systemd `path` + `service` user units
+   - **macOS**: launchd agent with `WatchPaths` (kqueue `NOTE_WRITE`)
 
 ## Requirements
 
-- Node.js, systemd (Linux)
+- Node.js
+- macOS or Linux
 - Claude Max or Pro subscription
 
 ## Reverting
 
 ```bash
+# Linux
 systemctl --user disable --now opencode-anthropic-patch.path opencode-anthropic-patch.service
 rm ~/.config/systemd/user/opencode-anthropic-patch.{service,path}
+
+# macOS
+launchctl unload ~/Library/LaunchAgents/com.vinzabe.opencode-anthropic-patch.plist
+rm ~/Library/LaunchAgents/com.vinzabe.opencode-anthropic-patch.plist
 ```
 
-## Without systemd
+## Without the watcher (one-shot)
 
 ```bash
-curl -sL https://raw.githubusercontent.com/vinzabe/opencode-anthropic-max-fix/main/install.cjs | node -- --no-systemd
+curl -sL https://raw.githubusercontent.com/vinzabe/opencode-anthropic-max-fix/master/install.cjs | node -- --no-watcher
 ```
